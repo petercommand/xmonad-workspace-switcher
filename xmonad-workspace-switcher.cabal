@@ -1,0 +1,40 @@
+name:                xmonad-workspace-switcher
+version:             0.1.0.0
+-- synopsis:
+-- description:
+homepage:            https://github.com/meelapshah/xmonad-workspace-switcher#readme
+license:             BSD3
+license-file:        LICENSE
+author:              Meelap Shah
+maintainer:          meelapshah@gmail.com
+copyright:           2017 Meelap Shah
+category:            Graphics
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     XMonad.Actions.WorkspaceSwitcher
+  build-depends:       base >= 4.7 && < 5
+                     , gtk >= 0.14.7
+                     , xmonad >= 0.13
+                     , glib >= 0.13.5.0
+                     , mtl >= 2.2.1
+  default-language:    Haskell2010
+
+executable example
+  main-is:             Main.hs
+  other-modules:       XMonad.Actions.WorkspaceSwitcher
+  build-depends:       base >= 4.7 && < 5
+                     , xmonad-workspace-switcher
+                     , gtk >= 0.14.7
+                     , xmonad >= 0.13
+                     , glib >= 0.13.5.0
+                     , mtl >= 2.2.1
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+
+source-repository head
+  type:     git
+  location: https://github.com/meelapshah/xmonad-workspace-switcher
