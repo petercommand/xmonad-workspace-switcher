@@ -23,17 +23,16 @@ library
                      , mtl >= 2.2.1
   default-language:    Haskell2010
 
-executable example
-  main-is:             Main.hs
-  other-modules:       XMonad.Actions.WorkspaceSwitcher
-  build-depends:       base >= 4.7 && < 5
-                     , xmonad-workspace-switcher
-                     , gtk >= 0.14.7
-                     , xmonad >= 0.13
-                     , glib >= 0.13.5.0
-                     , mtl >= 2.2.1
-  hs-source-dirs:      src
-  default-language:    Haskell2010
+--executable example
+  --main-is:             Main.hs
+  --build-depends:       base >= 4.7 && < 5
+                     --, xmonad-workspace-switcher
+                     --, gtk >= 0.14.7
+                     --, xmonad >= 0.13
+                     --, glib >= 0.13.5.0
+                     --, mtl >= 2.2.1
+  --hs-source-dirs:      cli
+  --default-language:    Haskell2010
 
 source-repository head
   type:     git

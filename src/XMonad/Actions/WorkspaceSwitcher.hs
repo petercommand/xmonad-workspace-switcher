@@ -5,7 +5,7 @@ import XMonad.StackSet as S
 
 import Control.Monad.Reader
 import Control.Monad.Trans (liftIO)
-import Data.List (find)
+import Data.List (find, findIndex)
 import Data.Maybe
 import Graphics.UI.Gtk as G
 import System.Glib.UTFString (glibToString)
@@ -35,18 +35,12 @@ getWorkspaceWindows = do
   X.trace (unlines $ map show res)
   return res
 
-data SwitcherXState = SwitcherXState
-  { xWorkspaces    :: [WorkspaceId]
-  , xCurrentWs     :: WorkspaceId
-  }
-
 data SwitcherConfig = SwitcherConfig
   { scale    :: Int -- downscale screenshot by this much
   , cols     :: Int -- arrange thumbnails into this many columns
-  , xstate   :: Maybe SwitcherXState
   }
 
-type SwitcherM = ReaderT SwitcherConfig IO
+type SwitcherM = ReaderT SwitcherConfig X.X
 
 scalePixbuf :: Int  -- scale
             -> Int  -- input width
@@ -73,17 +67,18 @@ getThumbnail x y w h win = do
     pb <- pixbufGetFromDrawable win (G.Rectangle x y w h)
     scalePixbuf s w h pb
 
-makeThumbnailGrid :: [Pixbuf]
-                  -> Int  -- thumb w
+makeThumbnailGrid :: [(WorkspaceId, Pixbuf)]
+                  -> WorkspaceId  -- current ws
                   -> SwitcherM IconView
-makeThumbnailGrid pbs tw = do
+makeThumbnailGrid thumbs current = do
   let pixbufColumn = makeColumnIdPixbuf 0
       labelColumn  = makeColumnIdString 1 :: ColumnId a String
+      Just curIdx = findIndex ((== current) . fst) thumbs
   config <- ask
   liftIO $ do
-    model <- listStoreNew ([0..8] :: [Int])
-    customStoreSetColumn model pixbufColumn (\r -> pbs !! r)
-    customStoreSetColumn model labelColumn (\r -> show r)
+    model <- listStoreNew thumbs
+    customStoreSetColumn model pixbufColumn snd
+    customStoreSetColumn model labelColumn fst
 
     iv <- iconViewNewWithModel model
     m <- iconViewGetModel iv
@@ -92,7 +87,7 @@ makeThumbnailGrid pbs tw = do
     iconViewSetReorderable iv False
     iconViewSetPixbufColumn iv pixbufColumn
     iconViewSetTextColumn iv labelColumn
-    iconViewSetCursor iv (Left [3] :: Either TreePath CellRenderer) False
+    iconViewSetCursor iv (Left [curIdx] :: Either TreePath CellRenderer) False
 
     -- TODO: name the gtk components so they can be styled with a .gtkrc
     return iv
@@ -103,26 +98,32 @@ makeThumbnailGrid pbs tw = do
 -- show switcher
 -- change current workspace based on selection
 
-switcherMain :: SwitcherM (Maybe WorkspaceId)
+switcherMain :: SwitcherM ()
 switcherMain = do
-  config <- ask
+  sconfig <- ask
+  xconfig <- lift ask
+  xstate <- lift X.get
+
+  let workspaceIds = X.workspaces . config $ xconfig
+      currentWs = S.currentTag . windowset $ xstate
+
   rw <- liftIO drawWindowGetDefaultRootWindow
   (w, h) <- liftIO $ drawableGetSize rw
-  pb_thumb <- getThumbnail 0 0 w h rw
-
-  let thumb_w = w `div` (scale config)
-      thumb_h = h `div` (scale config)
+  Just pb_thumb <- getThumbnail 0 0 w h rw
 
   -- Can't figure out how to create a regular window and set OverrideRedirect
   -- to make the window unmanaged.  So instead, create a "popup" window which
   -- has it set.
   win <- liftIO windowNewPopup
 
-  iv <- makeThumbnailGrid (catMaybes $ take 9 $ repeat pb_thumb) thumb_w
+  iv <- makeThumbnailGrid (zip workspaceIds (repeat pb_thumb)) currentWs
   fixedLayout <- liftIO fixedNew
   liftIO $ do
     windowSetDecorated win False
     windowSetPosition win WinPosCenter
+    containerAdd win fixedLayout
+    fixedPut fixedLayout iv (0, 0)
+
     win `on` deleteEvent $ liftIO mainQuit >> return False
     win `on` keyReleaseEvent $ do
       keyname <- glibToString <$> eventKeyName
@@ -133,28 +134,25 @@ switcherMain = do
           "Return" -> do
             sel <- iconViewGetSelectedItems iv
             putStrLn $ "selected: " ++ (show sel)
-            return False
+            case sel of
+              [] -> return False
+              x:_ -> do
+                -- Somehow run an X action here, within IO?
+                {-lift $ windows $ S.view (workspaceIds !! (head x))-}
+                mainQuit
+                return False
           _        -> return False
-    containerAdd win fixedLayout
-    fixedPut fixedLayout iv (0, 0)
 
-  liftIO $ do
     widgetShowAll win
     widgetGrabFocus win
     Just dw <- widgetGetWindow win
     gs <- keyboardGrab dw True G.currentTime
     putStrLn $ "grabStatus: " ++ (show gs)
+
     mainGUI
-    -- TODO block until exit, then get selection and return it?
-    return Nothing
+    return ()
 
 runSwitcher :: SwitcherConfig -> X ()
 runSwitcher sconfig = do
-  workspaceIds <- asks (X.workspaces . config)
-  currentWs <- gets $ S.currentTag . windowset
-  let x = SwitcherXState { xWorkspaces = workspaceIds
-                         , xCurrentWs = currentWs
-                         }
-      sconfig' = sconfig { xstate = Just x }
-  selectedWorkspaceId <- X.io $ runReaderT switcherMain sconfig'
+  runReaderT switcherMain sconfig
   return ()
